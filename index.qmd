@@ -1,0 +1,77 @@
+---
+title: "ds-presentation"
+format: revealjs
+---
+
+```{r}
+# Load libraries
+if (!require(pacman)) install.packages("pacman")
+pacman::p_unload(all)
+pacman::p_load(tidyverse, haven, janitor)
+
+# Load dataset
+data <- read_dta("E:/github/ds-presentation-paper-files/209090-V1/data/1_raw/IP_G20.dta")
+
+# 1. Deduplicate: One row per green policy (MeasureID) per year
+green_data <- data %>%
+  filter(!is.na(MeasureDescriptionTokens)) %>%
+  filter(!is.na(AnnouncedYear)) %>%
+  distinct(MeasureID, AnnouncedYear, CountryStd, .keep_all = TRUE)
+
+# 2. Add income group classification
+high_income <- c("Australia", "Canada", "France", "Germany", "Italy", "Japan",
+                 "Republic of Korea", "United Kingdom", "United States", "European Union")
+
+green_data <- green_data %>%
+  mutate(IncomeGroup = ifelse(CountryStd %in% high_income, "High-income", "Middle-income"))
+
+# 3. Count green policies per year and group
+counts <- green_data %>%
+  group_by(AnnouncedYear, IncomeGroup) %>%
+  summarise(policy_count = n(), .groups = "drop")
+
+# 4. Compute 2010–2012 average baseline
+baseline <- counts %>%
+  filter(AnnouncedYear %in% 2010:2012) %>%
+  group_by(IncomeGroup) %>%
+  summarise(baseline_avg = mean(policy_count), .groups = "drop")
+
+# 5. Calculate index = % of baseline × 100
+final <- counts %>%
+  left_join(baseline, by = "IncomeGroup") %>%
+  mutate(index = (policy_count / baseline_avg) * 1000)
+
+# 6. Split for plotting
+mid_df <- final %>% filter(IncomeGroup == "Middle-income")
+high_df <- final %>% filter(IncomeGroup == "High-income")
+
+# 7. Plot matching paper Figure 1
+ggplot() +
+  geom_line(data = mid_df, aes(x = AnnouncedYear, y = index, color = "Middle-income"), size = 1.2) +
+  geom_line(data = high_df, aes(x = AnnouncedYear, y = index, color = "High-income"), size = 1.2) +
+  scale_y_continuous(
+    name = "Total middle-income green industrial policy activity\n(percent of 2010–2012)",
+    sec.axis = sec_axis(~ . * (14000 / max(mid_df$index)), name = "Total high-income green industrial policy activity\n(percent of 2010–2012)")
+  ) +
+  scale_color_manual(values = c("Middle-income" = "purple", "High-income" = "skyblue"), name = NULL) +
+  scale_x_continuous(breaks = c(2010, 2013, 2016, 2019, 2022)) +
+  labs(
+    title = "Green Industrial Policy Activity in G20 Countries, 2010–2022",
+    subtitle = "Annual Count of Policies Relative to 2010–2012 Average",
+    x = "Year"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.title.y.left = element_text(margin = margin(r = 10)),
+    axis.title.y.right = element_text(margin = margin(l = 10)),
+    legend.position = "top"
+  )
+
+
+
+
+```
+
+#Data science test
+
+-   testing anvith
